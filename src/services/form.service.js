@@ -45,6 +45,11 @@ class FormService {
     return response.data
   }
 
+  async getResponseDetail(formUuid, responseId) {
+    const response = await api.get(`/forms/${formUuid}/responses/${responseId}`)
+    return response.data
+  }
+
   async duplicate(uuid) {
     const response = await api.post(`/forms/${uuid}/duplicate`)
     return response.data
