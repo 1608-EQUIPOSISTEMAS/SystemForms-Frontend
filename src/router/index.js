@@ -53,7 +53,7 @@ const routes = [
         component: () => import('@/views/admin/forms/FormCreateView.vue')
       },
       {
-        path: 'forms/:id/edit',
+        path: 'forms/:uuid/edit',
         name: 'AdminFormEdit',
         component: () => import('@/views/admin/forms/FormEditView.vue')
       },

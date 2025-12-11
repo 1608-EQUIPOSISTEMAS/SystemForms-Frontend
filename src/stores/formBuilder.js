@@ -255,6 +255,75 @@ export const useFormBuilderStore = defineStore('formBuilder', () => {
     }
   }
 
+  async function updateForm(uuid) {
+    saving.value = true
+    try {
+      // Preparar settings
+      const settings = {
+        is_active: form.value.settings.is_active,
+        is_public: form.value.settings.is_public,
+        requires_login: form.value.settings.requires_login,
+        available_from: form.value.settings.available_from || null,
+        available_until: form.value.settings.available_until || null,
+        time_limit_minutes: form.value.settings.time_limit_minutes || null,
+        allow_multiple_responses: form.value.settings.allow_multiple_responses,
+        show_progress_bar: form.value.settings.show_progress_bar,
+        shuffle_questions: form.value.settings.shuffle_questions,
+        passing_score: form.value.settings.passing_score || null,
+        show_score_after_submit: form.value.settings.show_score_after_submit,
+        show_correct_answers: form.value.settings.show_correct_answers,
+        welcome_message: form.value.settings.welcome_message || null,
+        submit_message: form.value.settings.submit_message || null
+      }
+
+      // Preparar preguntas
+      const preparedQuestions = questions.value.map((q, index) => ({
+        id: q.id || null, // null si es nueva
+        temp_id: q.temp_id,
+        question_type_id: q.question_type_id,
+        question_text: q.question_text,
+        help_text: q.help_text || null,
+        placeholder: q.placeholder || null,
+        is_required: !!q.is_required,
+        display_order: index,
+        points: parseFloat(q.points) || 0,
+        validation_rules: q.validation_rules || null,
+        config: q.config || null,
+        has_options: !!q.has_options,
+        options: q.options?.map((opt, optIndex) => ({
+          id: opt.id || null,
+          temp_id: opt.temp_id,
+          option_text: opt.option_text,
+          option_value: opt.option_value || opt.option_text,
+          display_order: optIndex,
+          is_correct: !!opt.is_correct,
+          points: parseFloat(opt.points) || 0
+        })) || []
+      }))
+
+      const payload = {
+        title: form.value.title,
+        description: form.value.description,
+        settings,
+        questions: preparedQuestions
+      }
+
+      const response = await formService.update(uuid, payload)
+      
+      if (response.ok) {
+        isDirty.value = false
+        return true
+      }
+      throw new Error(response.error || 'Error al actualizar')
+    } catch (error) {
+      console.error('Error updating form:', error)
+      throw error
+    } finally {
+      saving.value = false
+    }
+  }
+
+  // También asegurarse de que loadForm mapee correctamente las opciones
   async function loadForm(uuid) {
     loading.value = true
     try {
@@ -273,8 +342,8 @@ export const useFormBuilderStore = defineStore('formBuilder', () => {
             is_active: !!formData.is_active,
             is_public: !!formData.is_public,
             requires_login: !!formData.requires_login,
-            available_from: formData.available_from,
-            available_until: formData.available_until,
+            available_from: formatDateTimeLocal(formData.available_from),
+            available_until: formatDateTimeLocal(formData.available_until),
             time_limit_minutes: formData.time_limit_minutes,
             allow_multiple_responses: !!formData.allow_multiple_responses,
             show_progress_bar: !!formData.show_progress_bar,
@@ -288,40 +357,74 @@ export const useFormBuilderStore = defineStore('formBuilder', () => {
         }
         
         sections.value = secs || []
+        
+        // Mapear preguntas con sus opciones
         questions.value = qs.map(q => ({
-          ...q,
-          has_options: !!q.has_options
+          id: q.id,
+          question_type_id: q.question_type_id,
+          type_code: q.type_code,
+          type_name: q.type_name || getTypeName(q.type_code),
+          question_text: q.question_text,
+          help_text: q.help_text || '',
+          placeholder: q.placeholder || '',
+          is_required: !!q.is_required,
+          display_order: q.display_order,
+          points: q.points || 0,
+          has_options: !!q.has_options,
+          validation_rules: q.validation_rules,
+          config: q.config,
+          options: (q.options || []).map(opt => ({
+            id: opt.id,
+            option_text: opt.option_text || opt.text,
+            option_value: opt.option_value || opt.value || opt.text,
+            display_order: opt.display_order || opt.order,
+            is_correct: !!opt.is_correct,
+            points: opt.points || 0
+          }))
         }))
         
         isDirty.value = false
         return true
       }
       return false
+    } catch (error) {
+      console.error('Error loading form:', error)
+      return false
     } finally {
       loading.value = false
     }
   }
 
-  async function updateForm(uuid) {
-    saving.value = true
+  // Helper para formatear fecha para input datetime-local
+  function formatDateTimeLocal(dateString) {
+    if (!dateString) return null
     try {
-      const payload = {
-        title: form.value.title,
-        description: form.value.description,
-        settings: form.value.settings,
-        sections: sections.value,
-        questions: questions.value
-      }
-
-      const response = await formService.update(uuid, payload)
-      if (response.ok) {
-        isDirty.value = false
-        return true
-      }
-      throw new Error(response.error || 'Error al actualizar')
-    } finally {
-      saving.value = false
+      const date = new Date(dateString)
+      // Format: YYYY-MM-DDTHH:mm
+      return date.toISOString().slice(0, 16)
+    } catch {
+      return null
     }
+  }
+
+  // Helper para obtener nombre del tipo
+  function getTypeName(code) {
+    const names = {
+      TEXT: 'Texto Corto',
+      TEXTAREA: 'Texto Largo',
+      SELECT: 'Lista Desplegable',
+      RADIO: 'Opción Única',
+      CHECKBOX: 'Opción Múltiple',
+      NUMBER: 'Número',
+      EMAIL: 'Correo Electrónico',
+      DATE: 'Fecha',
+      TIME: 'Hora',
+      DATETIME: 'Fecha y Hora',
+      FILE: 'Archivo',
+      RATING: 'Calificación',
+      SCALE: 'Escala Lineal'
+    }
+    return names[code] || code
   }
 
   return {
